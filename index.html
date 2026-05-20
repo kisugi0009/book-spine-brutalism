@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>書背厚度計算機 - Brutalism</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  .mono { font-family: 'Space Mono', monospace; }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { opacity: 1; }
+  input:focus { outline: none; }
+
+  .paper-row {
+    border-bottom: 2px solid #000;
+    display: grid;
+    grid-template-columns: 3rem 1fr 8.5rem 10.5rem 3rem;
+    align-items: center;
+    min-height: 52px;
+  }
+  .paper-row:last-child { border-bottom: none; }
+
+  #refModal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.80); z-index: 9999;
+    padding: 2rem 1rem; overflow-y: auto;
+  }
+  #refModal.open { display: block; }
+  #refModalBox { background:#fff; border:4px solid #000; width:100%; max-width:600px; margin:0 auto; }
+  .modal-hd { background:#000; border-bottom:4px solid #000; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; }
+  .modal-hd-title { font-family:'Space Mono',monospace; font-size:13px; color:#facc15; letter-spacing:2px; }
+  .modal-close { background:none; border:2px solid #fff; color:#fff; font-weight:900; font-size:16px; width:32px; height:32px; cursor:pointer; line-height:1; }
+  .modal-search-wrap { padding:12px 14px; border-bottom:4px solid #000; background:#facc15; }
+  .modal-search-wrap input { width:100%; border:3px solid #000; padding:8px 12px; font-family:'Space Mono',monospace; font-size:14px; background:#fff; }
+  .modal-search-wrap input:focus { outline:none; }
+  #refTable { width:100%; border-collapse:collapse; }
+  #refTable th { background:#000; color:#facc15; font-size:12px; font-weight:900; letter-spacing:1px; padding:8px 12px; border-bottom:3px solid #000; font-family:'Space Mono',monospace; text-align:left; position:sticky; top:0; }
+  #refTable th:last-child { text-align:right; }
+  #refTable td { padding:8px 12px; border-bottom:2px solid #e5e5e5; font-size:13px; font-family:'Space Mono',monospace; cursor:pointer; }
+  #refTable tr:hover td { background:#fef08a; }
+  #refTable td:last-child { text-align:right; font-weight:700; }
+  .modal-scroll { max-height:400px; overflow-y:auto; }
+  .modal-footer { border-top:4px solid #000; padding:10px 14px; background:#f5f5f5; font-family:'Space Mono',monospace; font-size:12px; color:#666; }
+</style>
+</head>
+<body class="bg-yellow-400 min-h-screen">
+
+<!-- MODAL -->
+<div id="refModal" onclick="modalBgClick(event)">
+  <div id="refModalBox">
+    <div class="modal-hd">
+      <span class="modal-hd-title">條數對照表 — PAPER REFERENCE</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-search-wrap">
+      <input type="text" id="modalSearch" placeholder="搜尋紙張名稱..." oninput="filterTable()">
+    </div>
+    <div class="modal-scroll">
+      <table id="refTable">
+        <thead><tr><th>紙張名稱</th><th>條數/張</th></tr></thead>
+        <tbody id="refTbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">點擊任一列可填入條數（並自動帶入紙張名稱）</div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<section class="pt-8 pb-0 px-4">
+  <div class="w-full max-w-7xl mx-auto">
+    <div class="border-4 border-black">
+      <div class="grid grid-cols-3">
+        <div class="col-span-2 bg-white border-r-4 border-black p-8">
+          <h1 class="font-black text-black leading-none tracking-tight" style="font-size:clamp(3rem,8vw,6rem)">書背<br>厚度<br>計算</h1>
+        </div>
+        <div class="bg-black p-5 flex flex-col justify-end">
+          <div class="mono text-gray-500 leading-relaxed" style="font-size:clamp(0.75rem,1.5vw,1rem)">
+            <p>9.3條 = 1.93mm</p>
+            <p>誤差 ±1條</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INPUT -->
+<section class="pt-4 px-4">
+  <div class="w-full max-w-7xl mx-auto">
+    <div class="border-4 border-black">
+      <div class="border-b-4 border-black p-4 bg-black flex justify-between items-center">
+        <span class="mono text-white tracking-widest" style="font-size:clamp(0.75rem,1.5vw,0.9rem)">紙張規格輸入</span>
+        <span class="mono text-gray-500" style="font-size:clamp(0.75rem,1.5vw,0.9rem)">最多5種</span>
+      </div>
+
+      <!-- col headers -->
+      <div class="bg-white border-b-2 border-black" style="display:grid;grid-template-columns:3rem 1fr 8.5rem 10.5rem 3rem;align-items:center;min-height:40px">
+        <div class="border-r-4 border-black h-full flex items-center justify-center mono font-bold" style="font-size:clamp(0.7rem,1.2vw,0.85rem)">#</div>
+        <div class="border-r-2 border-gray-300 px-3 mono font-bold" style="font-size:clamp(0.7rem,1.2vw,0.85rem)">紙張名稱（選填）</div>
+        <div class="border-r-2 border-gray-300 px-3 mono font-bold text-right" style="font-size:clamp(0.7rem,1.2vw,0.85rem)">頁數</div>
+        <div class="border-r-4 border-black px-3 mono font-bold text-right" style="font-size:clamp(0.7rem,1.2vw,0.85rem)">條數/張</div>
+        <div></div>
+      </div>
+
+      <div id="rows" class="bg-white"></div>
+
+      <div class="border-t-2 border-black p-3 bg-blue-600">
+        <button id="addBtn" onclick="doAdd()"
+          class="w-full border-4 border-black bg-black text-yellow-400 font-black tracking-widest py-3 hover:bg-yellow-400 hover:text-black transition-none cursor-pointer"
+          style="font-size:clamp(0.8rem,1.5vw,1rem)">
+          + 新增紙張種類
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULTS -->
+<section class="pt-4 px-4 pb-10">
+  <div class="w-full max-w-7xl mx-auto">
+    <div class="border-4 border-black grid grid-cols-3">
+      <div class="bg-black border-r-4 border-black p-5">
+        <p class="mono text-gray-500 tracking-widest mb-2" style="font-size:clamp(0.7rem,1.2vw,0.85rem)">紙張種類</p>
+        <p class="font-black text-yellow-400 leading-none" style="font-size:clamp(1.8rem,4vw,3rem)" id="rPages">
+          0<span class="font-bold text-gray-500 ml-1" style="font-size:clamp(0.9rem,1.8vw,1.2rem)">種</span>
+        </p>
+      </div>
+      <div class="bg-white border-r-4 border-black p-5">
+        <p class="mono text-black tracking-widest mb-2" style="font-size:clamp(0.7rem,1.2vw,0.85rem)">合計厚度</p>
+        <p class="font-black text-black leading-none" style="font-size:clamp(1.8rem,4vw,3rem)" id="rStrips">
+          0.00<span class="font-bold text-gray-400 ml-1" style="font-size:clamp(0.9rem,1.8vw,1.2rem)">mm</span>
+        </p>
+      </div>
+      <div class="bg-red-500 p-5">
+        <p class="mono text-red-200 tracking-widest mb-2" style="font-size:clamp(0.7rem,1.2vw,0.85rem)">書背厚度</p>
+        <p class="font-black text-white leading-none" style="font-size:clamp(1.8rem,4vw,3rem)" id="rMm">
+          0.00<span class="font-bold text-red-200 ml-1" style="font-size:clamp(0.9rem,1.8vw,1.2rem)">mm</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="border-4 border-t-0 border-black bg-white flex items-center justify-between p-3 gap-4">
+      <span class="mono text-black" style="font-size:clamp(0.65rem,1.1vw,0.8rem)">算式：條數 × (頁數 ÷ 2) ÷ 100 = 厚度(mm)｜各紙張加總 + 1mm</span>
+      <button onclick="doReset()"
+        class="flex-shrink-0 border-4 border-black bg-black text-white font-black mono px-5 py-2 hover:bg-red-500 hover:border-red-500 transition-none cursor-pointer tracking-widest whitespace-nowrap"
+        style="font-size:clamp(0.7rem,1.2vw,0.85rem)">
+        全部清除
+      </button>
+    </div>
+  </div>
+</section>
+
+<script>
+const MAX = 5;
+let uid = 0;
+let activeTarget = null;
+
+const pd = [
+  {n:"雙銅紙 76g",s:6},{n:"雙銅紙 80g",s:6.5},{n:"雙銅紙 95g",s:7},{n:"雙銅紙 100g",s:8},{n:"雙銅紙 120g",s:9},{n:"雙銅紙 140g",s:12},{n:"雙銅紙 150g",s:13},{n:"雙銅紙 190g",s:15.5},
+  {n:"雪銅紙 80g",s:7},{n:"雪銅紙 100g",s:9},{n:"雪銅紙 120g",s:11},{n:"雪銅紙 150g",s:14},{n:"雪銅紙 190g",s:17},
+  {n:"銅西卡 200g",s:20},{n:"銅西卡 250g",s:25},{n:"銅西卡 280g",s:27},{n:"銅西卡 300g",s:30},{n:"銅西卡 350g",s:35},{n:"銅西卡 400g",s:41},{n:"銅西卡 450g",s:46},
+  {n:"道林紙 70g",s:9},{n:"道林紙 80g",s:10},{n:"道林紙 100g",s:12},{n:"道林紙 120g",s:13.75},{n:"道林紙 147g",s:17.5},{n:"道林紙 180g",s:24},
+  {n:"劃刋紙 80g",s:9},{n:"劃刋紙 100g",s:11},{n:"劃刋紙 120g",s:14},
+  {n:"白牛皮 100g",s:13},{n:"白牛皮 120g",s:15.5},{n:"白牛皮 140g",s:17},
+  {n:"單面合成 200g",s:20},{n:"雙面合成 200g",s:20},
+  {n:"合成卡 300g",s:31},{n:"合成卡 350g",s:36},{n:"合成卡 400g",s:40},{n:"合成卡 450g",s:45},{n:"合成卡 500g",s:50},
+  {n:"珠光紙 150g",s:15},{n:"赤牛皮 80g",s:12},{n:"赤牛皮 100g",s:14},{n:"赤牛皮 120g",s:15},
+  {n:"黃牛皮 100g",s:14},{n:"黃牛皮 120g",s:17},
+  {n:"灰銅 400g",s:54},{n:"白銅 400g",s:52},
+  {n:"單銅T-PE淋膜 370g",s:51},{n:"單銅T-PE淋膜 390g",s:56},
+  {n:"單銅T 215g",s:31},{n:"單銅T 235g",s:35},{n:"單銅T 270g",s:41},{n:"單銅T 295g",s:46},{n:"單銅T 325g",s:51},{n:"單銅T 350g",s:56},
+  {n:"赤牛環保卡 125g",s:18},{n:"赤牛環保卡 150g",s:21},{n:"赤牛環保卡 165g",s:23},{n:"赤牛環保卡 175g",s:24},{n:"赤牛環保卡 225g",s:31},{n:"赤牛環保卡 250g",s:35},{n:"赤牛環保卡 275g",s:38},{n:"赤牛環保卡 300g",s:41},{n:"赤牛環保卡 337g",s:46},
+  {n:"雪面銅西卡 220g",s:24},{n:"雪面銅西卡 250g",s:26},{n:"雪面銅西卡 300g",s:31},
+  {n:"一級卡 220g",s:23},{n:"一級卡 260g",s:29},{n:"一級卡 300g",s:34},{n:"一級卡 350g",s:42},
+  {n:"安格紙 220g",s:24},
+  {n:"象牙紙 120g",s:15},{n:"象牙紙 150g",s:20},{n:"象牙紙 180g",s:23},{n:"象牙紙 220g",s:27},{n:"象牙紙 270g",s:36},
+  {n:"萊妮紙 90g",s:11},{n:"萊妮紙 120g",s:14},{n:"萊妮紙 150g",s:17},{n:"萊妮紙 180g",s:23},{n:"萊妮紙 220g",s:26},{n:"萊妮紙 270g",s:33},
+  {n:"細紋紙 90g",s:11},{n:"細紋紙 120g",s:15},{n:"細紋紙 150g",s:17},{n:"細紋紙 180g",s:22},{n:"細紋紙 220g",s:27},
+  {n:"星幻紙 285g",s:35},{n:"雅風紙 90g",s:11},{n:"雅風紙 240g",s:30},
+  {n:"炫光紙 120g",s:16},{n:"炫光紙 250g",s:35},{n:"永采紙 120g",s:15},{n:"永采紙 240g",s:32},
+  {n:"麗斯毯紋紙 120g",s:16},{n:"麗斯毯紋紙 220g",s:27},
+  {n:"閃碟紙 120g",s:17},{n:"閃碟紙 240g",s:30},{n:"彩幻紙 220g",s:28},
+  {n:"柳葉紙 105g",s:14},{n:"柳葉紙 209g",s:28},{n:"風雲紙 250g",s:32},{n:"波光紙 250g",s:30},
+  {n:"鈦級鏡銅 240g",s:29},{n:"五感紙 232g",s:32},{n:"撲克牌 285g",s:29},
+  {n:"骨紋紙 80g",s:13},{n:"骨紋紙 100g",s:16},
+  {n:"映畫紙 100g",s:12},{n:"映畫紙 120g",s:13.5},{n:"映畫紙 140g",s:17},{n:"映畫紙 170g",s:20},{n:"映畫紙 200g",s:24},{n:"映畫紙 240g",s:30},{n:"映畫紙 290g",s:36},
+  {n:"黑卡 350g",s:47.5},
+  {n:"銅版貼紙 80g",s:20},{n:"銅版貼紙 160g",s:28},{n:"銅版貼紙 250g",s:38},
+  {n:"模造貼紙 80g",s:22},{n:"牛皮貼紙 80g",s:22},{n:"珠光貼紙 80g",s:27},
+  {n:"合成貼紙 80g",s:28},{n:"P.V.C透明貼紙 100g",s:30},{n:"透明靜電貼紙 150g",s:32},
+  {n:"金銀箔消光貼紙 80g",s:20},{n:"P.V.C雷射貼紙 50g",s:25},{n:"白亮PVC_R膠(壁貼) 100g",s:27}
+];
+
+function renderTable(filter) {
+  const kw = (filter||'').trim().toLowerCase();
+  const list = kw ? pd.filter(p => p.n.toLowerCase().includes(kw)) : pd;
+  document.getElementById('refTbody').innerHTML = list.map(p =>
+    `<tr onclick="pickStrips(${p.s},'${p.n.replace(/'/g,"\\'")}')"><td>${p.n}</td><td>${p.s}</td></tr>`
+  ).join('');
+}
+function filterTable() { renderTable(document.getElementById('modalSearch').value); }
+function openModal(targetId) {
+  activeTarget = targetId;
+  document.getElementById('modalSearch').value = '';
+  renderTable('');
+  document.getElementById('refModal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('refModal').classList.remove('open');
+  activeTarget = null;
+}
+function modalBgClick(e) { if (e.target === document.getElementById('refModal')) closeModal(); }
+
+function pickStrips(val, name) {
+  if (!activeTarget) return;
+  const stripInp = document.querySelector(`.paper-row[data-id="${activeTarget}"] .strips-input`);
+  if (stripInp) {
+    stripInp.value = val;
+    const row = stripInp.closest('.paper-row');
+    const nameInp = row.querySelector('.name-input');
+    if (nameInp && !nameInp.value) nameInp.value = name;
+    calc();
+  }
+  closeModal();
+}
+
+function calc() {
+  let totalMm = 0;
+  document.querySelectorAll('.paper-row').forEach(row => {
+    const pg = parseInt(row.querySelector('.pages-input').value) || 0;
+    const st = parseFloat(row.querySelector('.strips-input').value) || 0;
+    totalMm += st * (pg / 2) / 100;
+  });
+
+  const labelFs = 'font-size:clamp(0.9rem,1.8vw,1.2rem)';
+  document.getElementById('rPages').innerHTML =
+    document.querySelectorAll('.paper-row').length +
+    `<span class="font-bold text-gray-500 ml-1" style="${labelFs}">種</span>`;
+  document.getElementById('rStrips').innerHTML =
+    totalMm.toFixed(2) +
+    `<span class="font-bold text-gray-400 ml-1" style="${labelFs}">mm</span>`;
+  document.getElementById('rMm').innerHTML =
+    (totalMm + 1).toFixed(2) +
+    `<span class="font-bold text-red-200 ml-1" style="${labelFs}">mm</span>`;
+}
+
+function doAdd() {
+  const area = document.getElementById('rows');
+  if (area.querySelectorAll('.paper-row').length >= MAX) return;
+  const id = uid++;
+  const n  = area.querySelectorAll('.paper-row').length + 1;
+  const bg = n % 2 === 0 ? '#f5f5f5' : '#ffffff';
+
+  const row = document.createElement('div');
+  row.className = 'paper-row';
+  row.dataset.id = id;
+  row.style.background = bg;
+
+  row.innerHTML = `
+    <div class="border-r-4 border-black h-full flex items-center justify-center">
+      <span class="mono font-bold row-num" style="font-size:clamp(0.75rem,1.3vw,0.9rem)">${n}</span>
+    </div>
+    <div class="border-r-2 border-gray-300 px-3 flex items-center h-full">
+      <input type="text" placeholder="紙張名稱（選填）"
+        class="name-input flex-1 mono font-bold text-black bg-transparent border-none focus:bg-yellow-400 focus:outline-none px-1 py-2 min-w-0"
+        style="font-family:'Space Mono',monospace;font-size:clamp(0.75rem,1.3vw,0.9rem)">
+    </div>
+    <div class="border-r-2 border-gray-300 px-2 flex items-center justify-end gap-1 h-full">
+      <input type="number" min="0" step="2" placeholder="0" oninput="calc()"
+        class="pages-input w-full border-4 border-black p-1 font-black mono text-right focus:bg-yellow-400 bg-white text-black"
+        style="font-family:'Space Mono',monospace;font-size:clamp(0.8rem,1.4vw,1rem)" aria-label="頁數">
+      <span class="mono font-bold whitespace-nowrap" style="font-size:clamp(0.75rem,1.2vw,0.85rem)">頁</span>
+    </div>
+    <div class="border-r-4 border-black px-2 flex items-center justify-end gap-1 h-full">
+      <input type="number" min="0" step="0.5" placeholder="0" oninput="calc()"
+        class="strips-input w-14 border-4 border-black p-1 font-black mono text-right focus:bg-yellow-400 bg-white text-black"
+        style="font-family:'Space Mono',monospace;font-size:clamp(0.8rem,1.4vw,1rem)" aria-label="條數">
+      <span class="mono font-bold" style="font-size:clamp(0.75rem,1.2vw,0.85rem)">條</span>
+      <button onclick="openModal('${id}')" title="查閱條數表"
+        class="border-2 border-black bg-black text-yellow-400 mono font-bold flex items-center justify-center hover:bg-yellow-400 hover:text-black transition-none cursor-pointer leading-none flex-shrink-0"
+        style="font-size:clamp(0.7rem,1.2vw,0.85rem);width:1.8rem;height:1.8rem">?</button>
+    </div>
+    <div class="flex items-center justify-center h-full">
+      <button onclick="doDel(${id})" aria-label="刪除"
+        class="font-black text-gray-300 hover:text-red-500 leading-none transition-none cursor-pointer bg-transparent border-none"
+        style="font-size:clamp(1rem,2vw,1.4rem)">×</button>
+    </div>`;
+
+  area.appendChild(row);
+  document.getElementById('addBtn').disabled = area.querySelectorAll('.paper-row').length >= MAX;
+  calc();
+}
+
+function doDel(id) {
+  const r = document.querySelector(`.paper-row[data-id="${id}"]`);
+  if (r) r.remove();
+  document.querySelectorAll('.paper-row').forEach((r, i) => {
+    r.querySelector('.row-num').textContent = i + 1;
+    r.style.background = (i + 1) % 2 === 0 ? '#f5f5f5' : '#ffffff';
+  });
+  document.getElementById('addBtn').disabled = false;
+  calc();
+}
+
+function doReset() {
+  document.getElementById('rows').innerHTML = '';
+  uid = 0;
+  document.getElementById('addBtn').disabled = false;
+  calc();
+}
+</script>
+</body>
+</html>
